@@ -26,9 +26,9 @@ Assuming your backup is called "my-backup", on the client machine, run
 ```sh
 ~/encrypted-backup my-backup
 ```
-
 or add it to your crontab.
-You can also mount and unmount the encrypted directory while on the remote server, but you wil then have to provide the password manually:
+
+You can also mount and unmount the encrypted directory manually while on the remote server, but you will then have to provide the password to mount it, as it is not stored remotely (obviously, then the encryption would be pointless):
 ```sh
 ~/mount-encrypted-folder my-backup
 ~/unmount-encrypted-folder my-backup
