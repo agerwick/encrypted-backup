@@ -1,4 +1,10 @@
 #!/bin/bash
+if [ "$1" == "" ];
+then
+  echo "You must provide the name of the folder the encrypted directory is mounted in as a parameter."
+  echo "Example: $0 my-backup  # this will unmount my-backup from .my-backup-encrypted, if it is mounted"
+  exit 100
+fi
 BACKUP_DIR="`readlink -f $1`"
 echo "Unmounting \"$BACKUP_DIR\"..."
 if [ -d "$BACKUP_DIR" ];
@@ -20,6 +26,6 @@ then
     exit 0
   fi
 else
-  echo -n "ERROR: Directory \"$BACKUP_DIR\" does not exist"
+  echo "ERROR: Directory \"$BACKUP_DIR\" does not exist"
   exit 101
 fi

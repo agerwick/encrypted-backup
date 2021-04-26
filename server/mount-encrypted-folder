@@ -1,4 +1,10 @@
 #!/bin/bash
+if [ "$1" == "" ];
+then
+  echo "You must provide the name of the folder to mount the encrypted directory in as a parameter."
+  echo "Example: $0 my-backup  # this will mount .my-backup-encrypted to my-backup"
+  exit 100
+fi
 BACKUP_DIR="`readlink -f $1`"
 ENCRYPTED_DIR="`readlink -f .$1-encrypted`"
 echo "Mounting \"$BACKUP_DIR\" to encrypted directory \"$ENCRYPTED_DIR\"..."
