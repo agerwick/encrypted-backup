@@ -1,0 +1,30 @@
+#!/bin/bash
+BACKUP_DIR="`readlink -f $1`"
+ENCRYPTED_DIR="`readlink -f .$1-encrypted`"
+echo "Mounting \"$BACKUP_DIR\" to encrypted directory \"$ENCRYPTED_DIR\"..."
+if [ -d "$BACKUP_DIR" ] && [ -d "$ENCRYPTED_DIR" ];
+then
+  if mountpoint -q -- "$BACKUP_DIR";
+  then
+    echo "Encrypted directory already mounted"
+    exit 1
+  else
+    echo "Encrypted directory not mounted - running encfs"
+    encfs "$ENCRYPTED_DIR" "$BACKUP_DIR"
+    if mountpoint -q -- "$BACKUP_DIR";
+    then
+      echo "Encrypted directory successfully mounted"
+      exit 0
+    else
+      echo "ERROR - Encrypted directory could not be mounted - wrong password? - exiting"
+      exit 100
+    fi
+  fi
+else
+  echo "ERROR:"
+  echo -n "Directory \"$BACKUP_DIR\" "
+  if [ -d "$BACKUP_DIR" ]; then echo "exists"; else echo "does not exist"; fi
+  echo -n "Directory \"$ENCRYPTED_DIR\" "
+  if [ -d "$ENCRYPTED_DIR" ]; then echo "exists"; else echo "does not exist"; fi
+  exit 101
+fi

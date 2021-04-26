@@ -1,0 +1,85 @@
+#!/bin/bash
+BACKUP_PROFILE="$1"
+SCRIPT_NAME="`basename $0`"
+SCRIPT_DIR="`dirname $0`"
+
+if [ "$BACKUP_PROFILE" == "" ];
+then
+  echo "Syntax: $0 backup-profile"
+  echo "Example: $0 all-files"
+  echo "this will look for a config file called $SCRIPT_DIR/.$SCRIPT_NAME-config-all-files"
+  echo "if it does not exist it will be copied from $SCRIPT_DIR/.$SCRIPT_NAME-config and you will be asked to edit it"
+  echo
+  if [ "$(ls -1 $SCRIPT_DIR/.$SCRIPT_NAME-config-* 2>/dev/null | wc -l)" -ge "1" ];
+  then
+    echo "You currently have the following backup profiles:"
+    ls -1 $SCRIPT_DIR/.$SCRIPT_NAME-config-* | cut -c `expr length "$0-config-" + 1`-
+  else
+    echo "You currently don't have any backup profiles."
+  fi
+  exit 10
+fi
+
+CONFIG_FILE="$SCRIPT_DIR/.$SCRIPT_NAME-config-$BACKUP_PROFILE"
+
+if [ ! -f "$CONFIG_FILE" ];
+then
+  if [ -f "$SCRIPT_DIR/.$SCRIPT_NAME-config" ];
+  then
+    cp "$SCRIPT_DIR/.$SCRIPT_NAME-config" "$CONFIG_FILE"
+  else
+    echo "Sample config file $SCRIPT_DIR/.$SCRIPT_NAME-config not found, please copy it to the same directory as this script."
+    exit 11
+  fi
+fi
+
+if [ -f "$CONFIG_FILE" ];
+then
+  source "$CONFIG_FILE" # get config
+else
+  echo "failed to load config file."
+  exit 12
+fi
+
+if [ "$SAMPLE" == "YES" ];
+then
+  nano "$CONFIG_FILE"
+  exit 0
+fi
+
+# The following lines will input the password automaticlly.
+# If the directory is already mounted, technically it would still input the password but as it never asks for input, nothing happens.
+ssh $REMOTE_HOST ./mount-encrypted-folder $ENCRYPTED_DIR <<***end***
+$PASSWORD
+***end***
+MOUNT_ERROR=$?
+
+if [ $MOUNT_ERROR -eq 1 ]; # encrypted backup dir already mounted - so don't unmount it, in case another routine is using it
+then
+  UNMOUNT_AFTER_BACKUP=0
+  MOUNT_ERROR=0
+else
+  UNMOUNT_AFTER_BACKUP=1
+fi
+
+if [ $MOUNT_ERROR -eq 0 ];
+then
+  ssh $REMOTE_HOST mkdir $ENCRYPTED_DIR/$REMOTE_BACKUP_DIR 2> /dev/null
+  ssh $REMOTE_HOST mkdir $ENCRYPTED_DIR/$REMOTE_BACKUP_DIR/current 2> /dev/null
+  rsync -vtrlHP --del --delete-excluded $FILES_TO_BACK_UP $REMOTE_HOST:$ENCRYPTED_DIR/$REMOTE_BACKUP_DIR/current
+  RSYNC_ERROR_CODE=$?
+  if [ $RSYNC_ERROR_CODE -gt 0 ]; then echo "*** Error code $RSYNC_ERROR_CODE returned from rsync. ***"; fi
+  echo
+  echo "copying current to $DATETIME..."
+  ssh $REMOTE_HOST cp -lPR $ENCRYPTED_DIR/$REMOTE_BACKUP_DIR/current $ENCRYPTED_DIR/$REMOTE_BACKUP_DIR/$DATETIME
+  if [ $UNMOUNT_AFTER_BACKUP -eq 1 ];
+  then
+    ssh "unmounting encrypted backup directory"
+    ssh $REMOTE_HOST ./unmount-encrypted-folder $ENCRYPTED_DIR
+  else
+    echo "Skipping unmount as the encrypted directory was already mounted when the backup was started."
+  fi
+else
+  echo "Backup aborted"
+  exit 1
+fi

@@ -1,0 +1,25 @@
+#!/bin/bash
+BACKUP_DIR="`readlink -f $1`"
+echo "Unmounting \"$BACKUP_DIR\"..."
+if [ -d "$BACKUP_DIR" ];
+then
+  if mountpoint -q -- "$BACKUP_DIR";
+  then
+    echo "Encrypted directory mounted, attempting unmounting..."
+    fusermount -u "$BACKUP_DIR"
+    if mountpoint -q -- "$BACKUP_DIR";
+    then
+      echo "ERROR: unmount failed."
+      exit 102
+    else
+      echo "Successfully unmounted."
+      exit 0
+    fi
+  else
+    echo "Encrypted directory not mounted - no need to unmount"
+    exit 0
+  fi
+else
+  echo -n "ERROR: Directory \"$BACKUP_DIR\" does not exist"
+  exit 101
+fi

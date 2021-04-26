@@ -1,0 +1,14 @@
+#!/bin/bash
+#################################################################################################################################################
+############ You need to edit this file and save, then rerun the backup exactly as you just did, then this config file will be used. ############
+############ Note that the encrypted folder needs to be set up on the remote server before running the backup.                       ############
+#################################################################################################################################################
+
+SAMPLE="YES" # remove this to actually run the backup. Otherwise it will just edit this file again.
+PASSWORD="" # the password in cleartext - 16 random characters recommended.
+cd ~ # all files/dirs in FILES_TO_BACK_UP will be relative to this directory
+FILES_TO_BACK_UP="directory1 directory2 directory3/file1 another_file" # space separated list of directories and files you want to back up
+REMOTE_HOST="user@your-remote-server" # user@server -- must have the [un]mount-encrypted-folder scripts installed in the home directory
+ENCRYPTED_DIR="my_backup_dir" # name of the encrypted directory, normally in the backup user's home holder
+REMOTE_BACKUP_DIR="my_subdirectory" # a subdirectory to ENCRYPTED_DIR, so you can have multiple different backups in the encrypted folder. If you don't want this, set it to "."
+DATETIME=`date "+%Y%m%dT%H%M"` # format for subdirectories for each backup below REMOTE_BACKUP_DIR for each incremental backup.
