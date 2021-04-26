@@ -74,7 +74,7 @@ then
   ssh $REMOTE_HOST cp -lPR $ENCRYPTED_DIR/$REMOTE_BACKUP_DIR/current $ENCRYPTED_DIR/$REMOTE_BACKUP_DIR/$DATETIME
   if [ $UNMOUNT_AFTER_BACKUP -eq 1 ];
   then
-    ssh "unmounting encrypted backup directory"
+    echo "unmounting encrypted backup directory"
     ssh $REMOTE_HOST ./unmount-encrypted-folder $ENCRYPTED_DIR
   else
     echo "Skipping unmount as the encrypted directory was already mounted when the backup was started."
