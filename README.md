@@ -35,12 +35,14 @@ You can also mount and unmount the encrypted directory while on the remote serve
 ```
 
 If in doubt, you can run any of the commands without parameters for instructions on what to do:
+
 On the remote server:
 ```sh
 ~/set-up-new-encrypted-directory
 ~/mount-encrypted-folder
 ~/unmount-encrypted-folder
 ```
+
 On your local machine:
 ```sh
 ~/encrypted-backup
