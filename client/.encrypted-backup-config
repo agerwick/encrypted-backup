@@ -4,11 +4,39 @@
 ############ Note that the encrypted folder needs to be set up on the remote server before running the backup.                       ############
 #################################################################################################################################################
 
-SAMPLE="YES" # remove this to actually run the backup. Otherwise it will just edit this file again.
-PASSWORD="" # the password in cleartext - 16 random characters recommended.
-cd ~ # all files/dirs in FILES_TO_BACK_UP will be relative to this directory
-FILES_TO_BACK_UP="directory1 directory2 directory3/file1 another_file" # space separated list of directories and files you want to back up
-REMOTE_HOST="user@your-remote-server" # user@server -- must have the [un]mount-encrypted-folder scripts installed in the home directory
-ENCRYPTED_DIR="my_backup_dir" # name of the encrypted directory, normally in the backup user's home holder
-REMOTE_BACKUP_DIR="my_subdirectory" # a subdirectory to ENCRYPTED_DIR, so you can have multiple different backups in the encrypted folder. If you don't want this, set it to "."
-DATETIME=`date "+%Y%m%dT%H%M"` # format for subdirectories for each backup below REMOTE_BACKUP_DIR for each incremental backup.
+ACTION="EDIT" # remove this to actually run the backup. Otherwise it will just edit this file again.
+
+# the password in cleartext - 16 random characters is recommended, or even better - a long sentence, preferably with some words not found in a dictionary.
+PASSWORD=""
+
+# all files/dirs in FILES_TO_BACK_UP will be relative to this directory: (it should have "cd" in front as it's actually changing to that directory)
+cd ~
+
+# FILES_TO_BACK_UP: space separated list of directories and files you want to back up
+FILES_TO_BACK_UP="directory1 directory2 directory3/file1 another_file"
+# set to "" (empty) if you don't want to back up anything, and just use the script for mounting and unmounting the encrypted directory.
+
+# EXCLUDE: list of excluded files and directories.
+EXCLUDE="
+"
+# NOTE:
+#   excluded files are separated by newline. Blank lines are ok.
+#   The entire string, with newlines, must be surrounded by double quotes.
+#   File names with spaces are written as is, with no back slashes or quotes.
+
+
+# Remote user and hostname of you backup server. Unstandard ssh port is currently not supported"
+# REMOTE_HOST="user@server"
+REMOTE_HOST="my_user@my_backup_server.com"
+# the backup server must have the mount-encrypted-folder and unmount-encrypted-folder scripts installed in the home directory
+
+# ENCRYPTED_DIR is the name of the encrypted directory, normally in the backup user's home holder
+ENCRYPTED_DIR="my_backup_dir"
+
+# REMOTE_BACKUP_DIR is a subdirectory to ENCRYPTED_DIR, so you can have multiple different backups in the same encrypted folder.
+# If you don't want this, set it to "."
+REMOTE_BACKUP_DIR="my_subdirectory"
+
+# DATETIME is the format for subdirectories for each backup below REMOTE_BACKUP_DIR for each incremental backup.
+# You can normally leave this as is.
+DATETIME=`date "+%Y%m%dT%H%M"`

@@ -1,7 +1,38 @@
 #!/bin/bash
+
+# features I need to make:
+# if backup profile doesn't exist, instead of creating it, simply state the fact. It is a bit annoying if you have a spelling mistake.
+# to create a new backup profile, use keyword CREATE
+# maybe an sshfs option using MOUNT/UNMOUNT keywords mounting/unmounting an encypted dir on the client
+
 BACKUP_PROFILE="$1"
 SCRIPT_NAME="`basename $0`"
-SCRIPT_DIR="`dirname $0`"
+SCRIPT_DIR="`pwd -P`"
+if [ "'dirname'" == "." ]; then SCRIPT_DIR = "$`dirname $0`/SCRIPT_DIR"; fi
+ACTION="$2"
+PRIVATE_KEY="/home/raw/.ssh/id_rsa"
+
+# check given action, and set it again to make sure it's all upper case (for ease of comparison later)
+if [ "$ACTION" == "" ];
+then
+  ACTION="BACKUP"
+elif [ "${ACTION^^}" == "DECRYPT" ];
+then
+  ACTION="DECRYPT"
+elif [ "${ACTION^^}" == "ENCRYPT" ];
+then
+  ACTION="ENCRYPT"
+elif [ "${ACTION^^}" == "EDIT" ];
+then
+  ACTION="EDIT"
+else
+  echo "Param 2 (ACTION) must be either:"
+  echo "(empty)   = backup"
+  echo "'DECRYPT' = mount an encrypted backup dir on the server and leave open"
+  echo "'ENCRYPT' = unmount a mounted encrypted backup dir on the server"
+  echo "'EDIT'    = edit config file"
+  exit 9
+fi
 
 if [ "$BACKUP_PROFILE" == "" ];
 then
@@ -13,26 +44,50 @@ then
   if [ "$(ls -1 $SCRIPT_DIR/.$SCRIPT_NAME-config-* 2>/dev/null | wc -l)" -ge "1" ];
   then
     echo "You currently have the following backup profiles:"
-    ls -1 $SCRIPT_DIR/.$SCRIPT_NAME-config-* | cut -c `expr length "$0-config-" + 1`-
+    ls -1 $SCRIPT_DIR/.$SCRIPT_NAME-config-* | cut -c `expr length "$0-config-" + 2`-
+    echo
+    echo "To edit one of these:"
+    echo "$0 backup-profile EDIT"
   else
     echo "You currently don't have any backup profiles."
   fi
+  echo ""
+  echo "To decrypt (mount the remote encrypted backup dir so you can access it), without backing up any files:"
+  echo "$0 backup-profile DECRYPT"
+  echo "To encrypt (unmount the remote encrypted backup dir):"
+  echo "$0 backup-profile ENCRYPT"
+  echo
+  echo "The log file will be placed in: $SCRIPT_DIR/$SCRIPT_NAME-logs/"
   exit 10
 fi
 
 CONFIG_FILE="$SCRIPT_DIR/.$SCRIPT_NAME-config-$BACKUP_PROFILE"
+EXCLUDE_FILE="$SCRIPT_DIR/.$SCRIPT_NAME-exclude-$BACKUP_PROFILE"
+LOGFILE="$SCRIPT_DIR/$SCRIPT_NAME-logs/${BACKUP_PROFILE}_`date +\"%Y%m%dT%H%M\"`.log"
 
+# if config file doesn't exist, create it from the template
 if [ ! -f "$CONFIG_FILE" ];
 then
   if [ -f "$SCRIPT_DIR/.$SCRIPT_NAME-config" ];
   then
     cp "$SCRIPT_DIR/.$SCRIPT_NAME-config" "$CONFIG_FILE"
+    ACTION="EDIT" # this will also be set in the config file unless edited. Just in case...
   else
     echo "Sample config file $SCRIPT_DIR/.$SCRIPT_NAME-config not found, please copy it to the same directory as this script."
     exit 11
   fi
 fi
 
+# editing config file must happen before reading config file, as reading it will change the directory, in which case the path in CONFIG_FILE may not be correct
+if [ "$ACTION" == "EDIT" ];
+then
+  pwd
+  echo "$CONFIG_FILE"
+  nano "$CONFIG_FILE"
+  exit 0
+fi
+
+# read config file
 if [ -f "$CONFIG_FILE" ];
 then
   source "$CONFIG_FILE" # get config
@@ -41,43 +96,71 @@ else
   exit 12
 fi
 
-if [ "$SAMPLE" == "YES" ];
-then
-  nano "$CONFIG_FILE"
-  exit 0
-fi
+echo "$EXCLUDE" > $EXCLUDE_FILE
 
-# The following lines will input the password automaticlly.
-# If the directory is already mounted, technically it would still input the password but as it never asks for input, nothing happens.
-ssh $REMOTE_HOST ./mount-encrypted-folder $ENCRYPTED_DIR <<***end***
+if [[ "$ACTION" == @(BACKUP|DECRYPT) ]];
+then
+  # touch file in log dir to show that the script was started
+  date +"%Y%m%dT%H%M" > $SCRIPT_DIR/$SCRIPT_NAME-logs/${BACKUP_PROFILE}_last_run
+
+  # The following lines will input the password automatically.
+  # If the directory is already mounted, technically it would still input the password but as it never asks for input, nothing happens.
+  ssh $REMOTE_HOST ./mount-encrypted-folder $ENCRYPTED_DIR <<***end***
 $PASSWORD
 ***end***
-MOUNT_ERROR=$?
+  MOUNT_ERROR=$?
 
-if [ $MOUNT_ERROR -eq 1 ]; # encrypted backup dir already mounted - so don't unmount it, in case another routine is using it
-then
-  UNMOUNT_AFTER_BACKUP=0
-  MOUNT_ERROR=0
+  if [ $MOUNT_ERROR -eq 1 ]; # encrypted backup dir already mounted - so don't unmount it, in case another routine is using it
+  then
+    UNMOUNT_AFTER_BACKUP=0
+    MOUNT_ERROR=0
+  else
+    UNMOUNT_AFTER_BACKUP=1
+  fi
 else
+  MOUNT_ERROR=0 # otherwise UNMOUNT is possible
   UNMOUNT_AFTER_BACKUP=1
 fi
 
 if [ $MOUNT_ERROR -eq 0 ];
 then
-  ssh $REMOTE_HOST mkdir $ENCRYPTED_DIR/$REMOTE_BACKUP_DIR 2> /dev/null
-  ssh $REMOTE_HOST mkdir $ENCRYPTED_DIR/$REMOTE_BACKUP_DIR/current 2> /dev/null
-  rsync -vtrlHP --del --delete-excluded $FILES_TO_BACK_UP $REMOTE_HOST:$ENCRYPTED_DIR/$REMOTE_BACKUP_DIR/current
-  RSYNC_ERROR_CODE=$?
-  if [ $RSYNC_ERROR_CODE -gt 0 ]; then echo "*** Error code $RSYNC_ERROR_CODE returned from rsync. ***"; fi
-  echo
-  echo "copying current to $DATETIME..."
-  ssh $REMOTE_HOST cp -lPR $ENCRYPTED_DIR/$REMOTE_BACKUP_DIR/current $ENCRYPTED_DIR/$REMOTE_BACKUP_DIR/$DATETIME
-  if [ $UNMOUNT_AFTER_BACKUP -eq 1 ];
+  if [ "$ACTION" == "BACKUP" ];
   then
-    echo "unmounting encrypted backup directory"
-    ssh $REMOTE_HOST ./unmount-encrypted-folder $ENCRYPTED_DIR
-  else
-    echo "Skipping unmount as the encrypted directory was already mounted when the backup was started."
+    if [ "$FILES_TO_BACK_UP" == "" ];
+    then
+      echo "FILES_TO_BACK_UP is empty in $CONFIG_FILE -- No files to back up."
+    else
+      ssh $REMOTE_HOST mkdir $ENCRYPTED_DIR/$REMOTE_BACKUP_DIR 2> /dev/null
+      ssh $REMOTE_HOST mkdir $ENCRYPTED_DIR/$REMOTE_BACKUP_DIR/current 2> /dev/null
+      mkdir ~/encrypted-backup-logs/ 2> /dev/null
+      echo "Backing up files -- to see progress, execute this:"
+      echo "tail -f ~/encrypted-backup-logs/${BACKUP_PROFILE}_`date +\"%Y%m%dT%H%M\"`.log"
+      echo "rsync -vtrlHe "ssh -i $PRIVATE_KEY" --del --delete-excluded --exclude-from=$EXCLUDE_FILE $FILES_TO_BACK_UP $REMOTE_HOST:$ENCRYPTED_DIR/$REMOTE_BACKUP_DIR/current" > $LOGFILE
+      echo "Exclude file:" >> $LOGFILE
+      cat $EXCLUDE_FILE >> $LOGFILE
+      echo "--------------------------------------------------" >> $LOGFILE
+      rsync -vtrlH --del --delete-excluded --exclude-from=$EXCLUDE_FILE $FILES_TO_BACK_UP $REMOTE_HOST:$ENCRYPTED_DIR/$REMOTE_BACKUP_DIR/current >> $LOGFILE
+      RSYNC_ERROR_CODE=$?
+      if [ $RSYNC_ERROR_CODE -gt 0 ]; then echo "*** Error code $RSYNC_ERROR_CODE returned from rsync. ***" | tee -a $LOGFILE ; fi
+      echo
+      echo "copying current to $DATETIME..."
+      ssh $REMOTE_HOST cp -lPR $ENCRYPTED_DIR/$REMOTE_BACKUP_DIR/current $ENCRYPTED_DIR/$REMOTE_BACKUP_DIR/$DATETIME | tee -a $LOGFILE
+      # running backup retention script on the remote server (if any)...
+      echo "Running backup retention script, if it exists on the server ($ENCRYPTED_DIR/$REMOTE_BACKUP_DIR/backup_retention.sh)..."
+      ssh $REMOTE_HOST "BACKUP_RETENTION_SCRIPT=\$(realpath -m \"$ENCRYPTED_DIR/$REMOTE_BACKUP_DIR/backup_retention.sh\"); if [ -f \"\$BACKUP_RETENTION_SCRIPT\" ]; then if [ -x \"\$BACKUP_RETENTION_SCRIPT\" ]; then echo 'Running backup retention script...'; \$BACKUP_RETENTION_SCRIPT; else echo 'Backup retention script found, but not executable.'; fi; else echo \$'No backup retention script found.\nTo enable automatic backup retention, add your backup retention routine of choice to \$BACKUP_RETENTION_SCRIPT (in the encrypted dir on the backup server)\nHere is an example of such a script: https://github.com/agerwick/backup_retention.'; fi" | tee -a  $LOGFILE
+      fi
+    fi
+  fi
+
+  if [[ "$ACTION" == @(BACKUP|ENCRYPT) ]];
+  then
+    if [ $UNMOUNT_AFTER_BACKUP -eq 1 ];
+    then
+      echo "unmounting encrypted backup directory"
+      ssh $REMOTE_HOST ./unmount-encrypted-folder $ENCRYPTED_DIR
+    else
+      echo "Skipping unmount as the encrypted directory was already mounted when the backup was started."
+    fi
   fi
 else
   echo "Backup aborted"
